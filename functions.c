@@ -53,21 +53,21 @@ void IOinit() {
 }
 
 void Timerinit() {
-    IEC0bits.T1IE = 1;
+    IEC0bits.T1IE = 1; // eabled timer 1 interrupt
     T1CONbits.TCKPS = 0b11;
-    PR1 = 15625;
+    PR1 = 15625; // count for 1 s
     
-    IEC0bits.T2IE = 1; //enable timer interrupt
+    IEC0bits.T2IE = 1; // enable timer interrupt
     PR2 = 2000; // count for 1 ms
     
-    IEC0bits.T3IE = 1; //enable timer interrupt
+    IEC0bits.T3IE = 1; // enable timer interrupt
     T3CONbits.TCKPS = 0b11;
     PR3 = 235; // count for 150 ms
 }
 
 void primary_loop() {
     // Create output string
-    char* output_str[50];
+    char output_str[50];
 
     // Add null character to the end of the output string in case other
     // functions that would add the null character fail
@@ -80,8 +80,8 @@ void primary_loop() {
     make_bar(&output_str[0], 16, &current_bar);
     
     // Add formatted (hex or decimal) ADC_val to the output string depending on current_type
-    if (current_type == HEX) sprintf(&output_str[8], " %x    ", ADC_val);
-    else sprintf(&output_str[8], " %d    ", ADC_val);
+    if (current_type == HEX) sprintf(&output_str[16], " %x    ", ADC_val);
+    else sprintf(&output_str[16], " %d    ", ADC_val);
     
     // Display the output string
     Disp2String(output_str);
@@ -99,24 +99,31 @@ void make_bar(char *target, uint8_t target_len, char *bar_char) {
 }
 
 void wait_until_T1() {
+    // So long as timer 1 has not been triggered, go into Idle
     while (T1_triggered == 0) Idle();
+
     T1_triggered = 0;
     TMR1 = 0;
 }
 
 uint16_t do_ADC() {
+    // Declare variable to store ADC reading
     uint16_t ADC_value;
+
     AD1CON2bits.VCFG = 0b000;
     AD1CON3bits.ADRC = 0;
     AD1CHSbits.CH0SA = 0b0101;
     
-    AD1CON1bits.ADON = 1;
-    AD1CON1bits.SAMP = 1;
+    AD1CON1bits.ADON = 1; // Turn ADC on
+    AD1CON1bits.SAMP = 1; // Turn sampling on
     
+    // Wait until sampling is done
     while (AD1CON1bits.DONE == 0);
+    // Store reading from ADC
     ADC_value = ADC1BUF0;
-    AD1CON1bits.SAMP = 0;
-    AD1CON1bits.ADON = 0;
+
+    AD1CON1bits.SAMP = 0; // Turn sampling off
+    AD1CON1bits.ADON = 0; // Turn ADC off
     
     return ADC_value;
 }
@@ -134,11 +141,14 @@ void ADCinit() {
 }
 
 void get_sample() {
-    AD1CON1bits.ADON = 1;
-    AD1CON1bits.SAMP = 1;
+    AD1CON1bits.ADON = 1; // Turn ADC on
+    AD1CON1bits.SAMP = 1; // Turn sampling on
     
+    // Wait until sampling is done
     while (AD1CON1bits.DONE == 0);
+    // Store reading from ADC
     ADC_val = ADC1BUF0;
-    AD1CON1bits.SAMP = 0;
-    AD1CON1bits.ADON = 0;
+
+    AD1CON1bits.SAMP = 0; // Turn ADC off
+    AD1CON1bits.ADON = 0; // Turn sampling off
 }
