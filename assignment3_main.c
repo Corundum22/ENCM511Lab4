@@ -54,6 +54,7 @@
 
 #include "clkChange.h"
 #include "uart.h"
+//#include "functions.h"
 #include "stdio.h"
 
 #define BUTTON1 (PORTAbits.RA2 == 0)
@@ -75,7 +76,6 @@ enum bar_type {
     IDK = 'y',
 };
 
-uint16_t slow = 0;
 uint8_t received;
 uint8_t received_char = 0;
 uint8_t RXFlag = 0;
@@ -84,120 +84,11 @@ uint16_t ADC_val = 0;
 
 uint8_t PB_last = 0b000;
 uint8_t PB_current = 0b000;
-uint8_t PB_complete = 0;
 
 uint8_t T1_triggered = 0;
 
 enum presentation_type current_type = HEX;
 enum bar_type current_bar = DASH;
-
-void CNinit() {
-    IPC4bits.CNIP = 6;
-    IFS1bits.CNIF = 0;
-    IEC1bits.CNIE = 1;
-}
-
-void IOinit() {
-    TRISBbits.TRISB8 = 0;
-    LATBbits.LATB8 = 0;
-    
-    TRISAbits.TRISA4 = 1;
-    CNPU1bits.CN0PUE = 1;
-    CNEN1bits.CN0IE = 1;
-    
-    TRISBbits.TRISB4 = 1;
-    CNPU1bits.CN1PUE = 1;
-    CNEN1bits.CN1IE = 1;
-    
-    TRISAbits.TRISA2 = 1;
-    CNPU2bits.CN30PUE = 1;
-    CNEN2bits.CN30IE = 1;
-}
-
-void Timerinit() {
-    IEC0bits.T1IE = 1;
-    T1CONbits.TCKPS = 0b11;
-    PR1 = 15625;
-    
-    IEC0bits.T2IE = 1; //enable timer interrupt
-    PR2 = 2000; // count for 1 ms
-    
-    IEC0bits.T3IE = 1; //enable timer interrupt
-    T3CONbits.TCKPS = 0b11;
-    PR3 = 235; // count for 150 ms
-}
-
-void primary_loop() {
-    char* output_str[50];
-    output_str[49] = '\0';
-    get_sample();
-    
-    //sprintf(output_str, "                ");
-    //sprintf(output_str, "[================]");
-    
-    make_bar(&output_str[0], 16, &current_bar);
-    
-    if (current_type == HEX) sprintf(&output_str[8], " %x    ", ADC_val);
-    else sprintf(&output_str[8], " %d    ", ADC_val);
-    
-    Disp2String(output_str);
-    
-    
-    wait_until_T1();
-}
-
-void make_bar(char *target, uint8_t target_len, char *bar_char) {
-    uint16_t segment_num = ADC_val / 64;
-    
-    int i;
-    for (i = 0; i < segment_num; i++) target[i] = *bar_char;
-    for (; i < target_len; i++) target[i] = ' ';
-}
-
-void wait_until_T1() {
-    while (T1_triggered == 0) Idle();
-    T1_triggered = 0;
-    TMR1 = 0;
-}
-
-uint16_t do_ADC() {
-    uint16_t ADC_value;
-    AD1CON2bits.VCFG = 0b000;
-    AD1CON3bits.ADRC = 0;
-    AD1CHSbits.CH0SA = 0b0101;
-    
-    AD1CON1bits.ADON = 1;
-    AD1CON1bits.SAMP = 1;
-    
-    while (AD1CON1bits.DONE == 0);
-    ADC_value = ADC1BUF0;
-    AD1CON1bits.SAMP = 0;
-    AD1CON1bits.ADON = 0;
-    
-    return ADC_value;
-}
-
-void ADCinit() {
-    AD1CON1bits.FORM = 0b00;
-    AD1CON1bits.SSRC = 0b111;
-    AD1CON1bits.ASAM = 0b0;
-    AD1CON2bits.VCFG = 0b000;
-    AD1CON3bits.ADRC = 0;
-    AD1CHSbits.CH0SA = 0b0101;
-    AD1CHSbits.CH0NA = 0;
-    AD1CON2bits.ALTS = 0;
-    AD1CON3bits.SAMC = 0b11111;
-}
-
-void get_sample() {
-    AD1CON1bits.ADON = 1;
-    AD1CON1bits.SAMP = 1;
-    
-    while (AD1CON1bits.DONE == 0);
-    ADC_val = ADC1BUF0;
-    AD1CON1bits.SAMP = 0;
-    AD1CON1bits.ADON = 0;
-}
 
 int main(void) {
     newClk(8);
@@ -209,8 +100,6 @@ int main(void) {
     IOinit();
     Timerinit();
     ADCinit();
-    
-    Disp2String("something");
     
     T1CONbits.TON = 1;
     while(1) primary_loop();
@@ -231,7 +120,16 @@ void __attribute__((interrupt, no_auto_psv)) _T2Interrupt(void){
 void __attribute__((interrupt, no_auto_psv)) _T3Interrupt(void){
     IFS0bits.T3IF = 0; // clear interrupt flag
     
-    PB_complete = 1;
+    if (PB_current == 0b000) {
+        if (PB_last == 0b001) current_bar = EQUALS;
+        else if (PB_last == 0b010) current_bar = DASH;
+        else if (PB_last == 0b100) current_bar = TILDE;
+        else if (PB_last == 0b011) current_bar = EX;
+        else if (PB_last == 0b110) current_bar = PERCENTAGE;
+        else if (PB_last == 0b101) current_bar = OHS;
+        else if (PB_last == 0b111) current_bar = IDK;
+    }
+    
     PB_last = 0b000;
     
     T3CONbits.TON = 0;
@@ -244,16 +142,6 @@ void __attribute__((interrupt, no_auto_psv)) _CNInterrupt(void){
     //PB_last = PB_current;
     PB_last |= PB_current; // accumulates the buttons that have been pressed
     PB_current = ((BUTTON1) | (BUTTON2 << 1) | (BUTTON3 << 2));
-    
-    if (PB_current == 0b000) {
-        if (PB_last == 0b001) current_bar = EQUALS;
-        else if (PB_last == 0b010) current_bar = DASH;
-        else if (PB_last == 0b100) current_bar = TILDE;
-        else if (PB_last == 0b011) current_bar = EX;
-        else if (PB_last == 0b110) current_bar = PERCENTAGE;
-        else if (PB_last == 0b101) current_bar = OHS;
-        else if (PB_last == 0b111) current_bar = IDK;
-    }
     
     if (T3CONbits.TON == 0) {
         TMR3 = 0;
