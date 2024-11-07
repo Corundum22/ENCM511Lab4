@@ -1,8 +1,8 @@
 /*
  * File:   main.c
- * Author: UPDATE THIS WITH YOUR GROUP MEMBER NAMES OR POTENTIALLY LOSE POINTS
+ * Author: Jarred Eisbrenner, Angad Minhas, Sam Schroeder
  *
- * Created on: USE THE INFORMATION FROM THE HEADER MPLAB X IDE GENERATES FOR YOU
+ * Created on: 29 Oct, 2024
  */
 
 // FBS
@@ -54,7 +54,6 @@
 
 #include "clkChange.h"
 #include "uart.h"
-//#include "functions.h"
 #include "stdio.h"
 
 #define BUTTON1 (PORTAbits.RA2 == 0)
@@ -93,7 +92,7 @@ enum bar_type current_bar = DASH;
 int main(void) {
     newClk(8);
     
-    AD1PCFG = 0xFFFF; /* keep this line as it sets I/O pins that can also be analog to be digital */
+    AD1PCFG = 0b1111111111011111;
     
     InitUART2();
     CNinit();
@@ -120,6 +119,7 @@ void __attribute__((interrupt, no_auto_psv)) _T2Interrupt(void){
 void __attribute__((interrupt, no_auto_psv)) _T3Interrupt(void){
     IFS0bits.T3IF = 0; // clear interrupt flag
     
+    // Sets the state of the current bar type depending on the buttons
     if (PB_current == 0b000) {
         if (PB_last == 0b001) current_bar = EQUALS;
         else if (PB_last == 0b010) current_bar = DASH;
@@ -130,7 +130,7 @@ void __attribute__((interrupt, no_auto_psv)) _T3Interrupt(void){
         else if (PB_last == 0b111) current_bar = IDK;
     }
     
-    PB_last = 0b000;
+    PB_last = 0b000; // Resets the last button state
     
     T3CONbits.TON = 0;
 }
@@ -139,10 +139,11 @@ void __attribute__((interrupt, no_auto_psv)) _T3Interrupt(void){
 void __attribute__((interrupt, no_auto_psv)) _CNInterrupt(void){
     IFS1bits.CNIF = 0; // clear interrupt flag
     
-    //PB_last = PB_current;
+    // PB_last = PB_current;
     PB_last |= PB_current; // accumulates the buttons that have been pressed
     PB_current = ((BUTTON1) | (BUTTON2 << 1) | (BUTTON3 << 2));
-    
+   
+    // Starts timer 3 if it is not yet started
     if (T3CONbits.TON == 0) {
         TMR3 = 0;
         T3CONbits.TON = 1;
