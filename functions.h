@@ -45,10 +45,4 @@ void make_bar(char *target, uint8_t target_len, char *bar_char);
 
 void wait_until_T1();
 
-uint16_t do_ADC();
-
-void ADCinit();
-
-void get_sample();
-
 #endif
